@@ -8,15 +8,12 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 enum Payload {
-    // Received Echo command
-    Echo {
-        echo: String,
+    Generate,
+    GenerateOk {
+        #[serde(rename = "id")]
+        guid: String,
     },
 
-    // Reply to an Echo command
-    EchoOk {
-        echo: String,
-    },
     Error {
         text: String,
     },
@@ -27,22 +24,23 @@ enum Payload {
     InitOk,
 }
 
-struct EchoNode {
+struct UniqueNode {
     msg_id: usize,
 }
 
-impl Node<Payload> for EchoNode {
+impl Node<Payload> for UniqueNode {
     fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
         match input.body.payload {
-            // We received an Echo command
-            Payload::Echo { echo } => {
+            // We received an Generate command
+            Payload::Generate => {
+                let guid = ulid::Ulid::new().to_string();
                 let reply = Message {
                     src: input.dst,
                     dst: input.src,
                     body: Body {
                         id: Some(self.msg_id),
                         in_reply_to: input.body.id,
-                        payload: Payload::EchoOk { echo },
+                        payload: Payload::GenerateOk { guid },
                     },
                 };
 
@@ -53,9 +51,10 @@ impl Node<Payload> for EchoNode {
                 //  - I think possibly because output still is never moved.
                 serde_json::to_writer(&mut *output, &reply)?;
                 output.write_all(b"\n")?;
-                self.msg_id += 1
+
+                self.msg_id += 1;
             }
-            Payload::EchoOk { echo } => todo!(),
+            Payload::GenerateOk { guid } => todo!(),
             Payload::Error { text } => todo!(),
             Payload::Init { .. } => {
                 // When Init is received, we want to reply saying that we have initialised the node
@@ -70,6 +69,8 @@ impl Node<Payload> for EchoNode {
                 };
                 serde_json::to_writer(&mut *output, &reply)?;
                 output.write_all(b"\n")?;
+
+                self.msg_id += 1;
             }
             Payload::InitOk => bail!("Received InitOk Message"),
         };
@@ -80,5 +81,5 @@ impl Node<Payload> for EchoNode {
 }
 
 fn main() -> anyhow::Result<()> {
-    main_loop(EchoNode { msg_id: 0 })
+    main_loop(UniqueNode { msg_id: 0 })
 }
