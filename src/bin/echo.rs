@@ -1,7 +1,6 @@
 use std::io::{StdoutLock, Write};
 
-use anyhow::bail;
-use dist_sys::*;
+use distributers::{main_loop, Body, Init, Message, Node};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -9,29 +8,18 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 enum Payload {
     // Received Echo command
-    Echo {
-        echo: String,
-    },
+    Echo { echo: String },
 
     // Reply to an Echo command
-    EchoOk {
-        echo: String,
-    },
-    Error {
-        text: String,
-    },
-    Init {
-        node_id: String,
-        node_ids: Vec<String>,
-    },
-    InitOk,
+    EchoOk { echo: String },
+    Error { text: String },
 }
 
 struct EchoNode {
     msg_id: usize,
 }
 
-impl Node<Payload> for EchoNode {
+impl Node<(), Payload> for EchoNode {
     fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
         match input.body.payload {
             // We received an Echo command
@@ -55,30 +43,22 @@ impl Node<Payload> for EchoNode {
                 output.write_all(b"\n")?;
                 self.msg_id += 1
             }
-            Payload::EchoOk { echo } => todo!(),
-            Payload::Error { text } => todo!(),
-            Payload::Init { .. } => {
-                // When Init is received, we want to reply saying that we have initialised the node
-                let reply = Message {
-                    src: input.dst,
-                    dst: input.src,
-                    body: Body {
-                        id: Some(self.msg_id),
-                        in_reply_to: input.body.id,
-                        payload: Payload::InitOk,
-                    },
-                };
-                serde_json::to_writer(&mut *output, &reply)?;
-                output.write_all(b"\n")?;
-            }
-            Payload::InitOk => bail!("Received InitOk Message"),
+            Payload::EchoOk { .. } => todo!(),
+            Payload::Error { .. } => todo!(),
         };
 
         // Increment id every time or only when we
         Ok(())
     }
+
+    fn from_init(_state: (), _init: Init) -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(EchoNode { msg_id: 1 }) // start at 1 because init response is the 0th msg
+    }
 }
 
 fn main() -> anyhow::Result<()> {
-    main_loop(EchoNode { msg_id: 0 })
+    main_loop::<_, EchoNode, _>(())
 }
