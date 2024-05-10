@@ -11,6 +11,24 @@ pub struct Message<P> {
     pub body: Body<P>,
 }
 
+impl<P> Message<P> {
+    pub fn into_reply(self, id: Option<&mut usize>, reply_payload: P) -> Self {
+        Self {
+            src: self.dst,
+            dst: self.src,
+            body: Body {
+                id: id.map(|id| {
+                    let msg_id = *id;
+                    *id += 1;
+                    msg_id
+                }),
+                in_reply_to: self.body.id,
+                payload: reply_payload,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Body<P> {
     #[serde(rename = "msg_id")]
@@ -19,6 +37,7 @@ pub struct Body<P> {
     #[serde(flatten)]
     pub payload: P,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
