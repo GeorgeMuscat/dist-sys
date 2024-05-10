@@ -1,6 +1,6 @@
 use std::io::{StdoutLock, Write};
 
-use distributers::{main_loop, Body, Init, Message, Node};
+use distributers::{main_loop, Init, Message, Node};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,15 +29,7 @@ impl Node<(), Payload> for UniqueNode {
             // We received an Generate command
             Payload::Generate => {
                 let guid = format!("{}-{}", self.node, self.msg_id); // Valid under the assumption that node ids are not reused (even on restart of a single node)
-                let reply = Message {
-                    src: input.dst,
-                    dst: input.src,
-                    body: Body {
-                        id: Some(self.msg_id),
-                        in_reply_to: input.body.id,
-                        payload: Payload::GenerateOk { guid },
-                    },
-                };
+                let reply = input.into_reply(Some(&mut self.msg_id), Payload::GenerateOk { guid });
 
                 // &mut * is called a "reborrow"
                 // This allows to_writer to take ownership of the mutable borrow that is output.
@@ -49,11 +41,10 @@ impl Node<(), Payload> for UniqueNode {
 
                 self.msg_id += 1;
             }
-            Payload::GenerateOk { .. } => todo!(),
-            Payload::Error { .. } => todo!(),
+            Payload::GenerateOk { .. } => {}
+            Payload::Error { .. } => {}
         };
 
-        // Increment id every time or only when we
         Ok(())
     }
 
